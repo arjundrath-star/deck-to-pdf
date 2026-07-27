@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Deck to PDF",
+  "version": "0.4.0",
+  "minimum_chrome_version": "112",
+  "description": "Download a DocSend or Papermark deck as a PDF in one click. Also converts founder deck sites.",
+  "permissions": ["downloads", "activeTab", "declarativeNetRequest", "scripting", "storage"],
+  "host_permissions": [
+    "https://docsend.com/*",
+    "https://*.docsend.com/*",
+    "https://*.cloudfront.net/*",
+    "https://papermark.com/*",
+    "https://*.papermark.com/*",
+    "https://*.papermark.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://docsend.com/v/*",
+        "https://docsend.com/view/*",
+        "https://docsend.com/s/*",
+        "https://*.docsend.com/v/*",
+        "https://*.docsend.com/view/*",
+        "https://*.docsend.com/s/*",
+        "https://papermark.com/view/*",
+        "https://www.papermark.com/view/*",
+        "https://*.papermark.com/view/*",
+        "https://*.papermark.io/view/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    },
+    "default_title": "Deck to PDF"
+  }
+}
