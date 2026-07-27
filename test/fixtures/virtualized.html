@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Virtualized list fixture</title>
+<style>body{margin:0}</style></head>
+<body>
+<!-- 21 virtual slides, but only a 5-slide window is ever mounted. The DOM
+     never holds the whole deck; the low-count warning is the only defense. -->
+<div id="track" style="position:relative"></div>
+<script>
+  const N = 21, WINDOW = 5;
+  const track = document.getElementById("track");
+  const slotH = () => Math.round((document.documentElement.clientWidth * 675) / 1200);
+  function layout() {
+    const h = slotH();
+    track.style.height = h * N + "px";
+    const first = Math.max(0, Math.min(N - WINDOW, Math.floor(scrollY / h) - 1));
+    track.textContent = "";
+    for (let i = first; i < first + WINDOW; i++) {
+      const img = document.createElement("img");
+      img.src = "/gen/1200x675/v" + (i + 1) + ".svg";
+      img.style.cssText = "position:absolute;left:0;width:100%;top:" + i * h + "px";
+      track.appendChild(img);
+    }
+  }
+  addEventListener("scroll", layout);
+  addEventListener("resize", layout);
+  layout();
+</script>
+</body>
+</html>

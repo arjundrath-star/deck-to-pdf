@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Lazy next/image-style fixture</title>
+<style>body{margin:0} img{display:block;width:100%;margin:0 0 8px}</style></head>
+<body>
+<!-- 16 slides, native lazy loading, srcset with a small and a large variant.
+     Below-the-fold slides stay naturalWidth 0 until the viewer scrolls; the
+     heuristic must pick the LARGEST srcset candidate, never the loaded one. -->
+<div style="height:400px">header spacer</div>
+<script>
+  for (let i = 1; i <= 16; i++) {
+    const img = document.createElement("img");
+    img.setAttribute("loading", "lazy");
+    img.setAttribute("width", "1920");
+    img.setAttribute("height", "1080");
+    img.setAttribute("src", "/gen/640x360/l" + i + ".svg");
+    img.setAttribute(
+      "srcset",
+      "/gen/640x360/l" + i + ".svg 640w, /gen/1920x1080/l" + i + ".svg 1920w"
+    );
+    document.body.appendChild(img);
+  }
+</script>
+</body>
+</html>

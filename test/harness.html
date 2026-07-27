@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Generic-mode browser harness</title>
+<style>
+  body { font-family: sans-serif; margin: 24px; }
+  table { border-collapse: collapse; margin: 16px 0; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; font-size: 13px; text-align: left; }
+  .pass { color: #1e7a46; font-weight: 600; }
+  .fail { color: #c0392b; font-weight: 600; }
+  iframe { width: 1280px; height: 800px; border: 1px solid #ddd; display: block; }
+  /* The stage must be GENUINELY visible: Chrome throttles rendering and
+     image loading in off-screen or nearly-invisible iframes, which starves
+     the lazy fixtures. The fixture under test is shown small in the corner. */
+  #stage { position: fixed; top: 8px; right: 8px; pointer-events: none; border: 2px solid #888; }
+  #stage iframe { width: 1280px; height: 800px; transform: scale(0.25); transform-origin: top left; }
+  #stage { width: 320px; height: 200px; overflow: hidden; background: #fff; }
+</style>
+</head>
+<body>
+<h1>Generic-mode browser harness</h1>
+<p>Runs the shipped DOM-layer + heuristic code against every fixture. The
+real captured deck runs only when the server was given its git-ignored path.</p>
+<div id="status">running…</div>
+<table id="results"><tr><th>fixture</th><th>check</th><th>result</th><th>detail</th></tr></table>
+<pre id="json"></pre>
+<div id="stage"></div>
+
+<script type="module">
+import { analyzeDocument } from "/.build/generic-dom.js";
+
+const rows = [];
+const stage = document.getElementById("stage");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function report(fixture, check, pass, detail = "") {
+  rows.push({ fixture, check, pass, detail });
+  const tr = document.createElement("tr");
+  tr.innerHTML =
+    `<td>${fixture}</td><td>${check}</td>` +
+    `<td class="${pass ? "pass" : "fail"}">${pass ? "PASS" : "FAIL"}</td><td>${detail}</td>`;
+  document.getElementById("results").appendChild(tr);
+}
+
+function loadFixture(src) {
+  return new Promise((resolve, reject) => {
+    const iframe = document.createElement("iframe");
+    iframe.onload = () => resolve(iframe);
+    iframe.onerror = reject;
+    iframe.src = src;
+    stage.appendChild(iframe);
+  });
+}
+
+async function waitImagesLoaded(win, timeoutMs = 8000) {
+  const start = performance.now();
+  while (performance.now() - start < timeoutMs) {
+    const imgs = [...win.document.images];
+    if (imgs.length > 0 && imgs.every((i) => i.naturalWidth > 0)) return true;
+    await sleep(150);
+  }
+  return false;
+}
+
+function analyze(iframe) {
+  return analyzeDocument(iframe.contentWindow, iframe.contentDocument).analysis;
+}
+
+/**
+ * Deterministic stand-in for the user scrolling through the whole page.
+ * Native lazy loading (and even a lazy-to-eager attribute flip) only resumes
+ * when Chrome is actively rendering the frame, and an automated or hidden
+ * tab may never render. Images that are eager FROM PARSE load regardless,
+ * so rebuild every unloaded image in place without the loading attribute.
+ * The heuristic under test does not care how an image came to be loaded.
+ */
+function forceEager(win) {
+  for (const img of [...win.document.images]) {
+    if (img.naturalWidth > 0) continue;
+    const clone = win.document.createElement("img");
+    for (const attr of img.attributes) {
+      if (attr.name !== "loading") clone.setAttribute(attr.name, attr.value);
+    }
+    img.replaceWith(clone);
+  }
+}
+
+async function run() {
+  // 1. no-deck article
+  {
+    const f = await loadFixture("/fixtures/no-deck.html");
+    await waitImagesLoaded(f.contentWindow);
+    const a = analyze(f);
+    report("no-deck", "declines with no-deck", a.status === "no-deck", JSON.stringify(a));
+    f.remove();
+  }
+
+  // 2. loop-clone carousel
+  {
+    const f = await loadFixture("/fixtures/loop-clone.html");
+    const loaded = await waitImagesLoaded(f.contentWindow);
+    const a = analyze(f);
+    const urls = a.status === "ok" ? a.slides.map((s) => new URL(s.url).pathname) : [];
+    report("loop-clone", "all 23 imgs loaded", loaded);
+    report("loop-clone", "status ok", a.status === "ok", a.status);
+    report("loop-clone", "21 unique slides", urls.length === 21, `got ${urls.length}`);
+    report("loop-clone", "starts at slide 1", urls[0] === "/gen/1200x675/c1.svg", urls[0] || "");
+    report("loop-clone", "ends at slide 21", urls[20] === "/gen/1200x675/c21.svg", urls[20] || "");
+    report("loop-clone", "2 clones dropped", a.status === "ok" && a.droppedDuplicates === 2,
+      `dropped ${a.status === "ok" ? a.droppedDuplicates : "n/a"}`);
+    f.remove();
+  }
+
+  // 3. lazy next/image
+  {
+    const f = await loadFixture("/fixtures/lazy.html");
+    await sleep(600); // let eager-region images settle, keep below-fold lazy
+    const before = analyze(f);
+    const lazySignal =
+      (before.status === "ok" && before.lazyCount > 0) ||
+      (before.status === "no-deck" && before.reason === "lazy");
+    report("lazy", "keep-scrolling signal before scroll", lazySignal, JSON.stringify(before).slice(0, 120));
+    forceEager(f.contentWindow);
+    const ok = await waitImagesLoaded(f.contentWindow);
+    const after = analyze(f);
+    report("lazy", "all imgs loaded after scroll", ok);
+    report("lazy", "status ok after scroll", after.status === "ok", after.status);
+    report("lazy", "16 slides", after.status === "ok" && after.slides.length === 16,
+      `got ${after.status === "ok" ? after.slides.length : "n/a"}`);
+    report("lazy", "largest srcset candidate chosen",
+      after.status === "ok" && after.slides.every((s) => s.url.includes("/gen/1920x1080/")),
+      after.status === "ok" ? new URL(after.slides[0].url).pathname : "");
+    report("lazy", "no lazy leftovers", after.status === "ok" && after.lazyCount === 0,
+      `lazyCount ${after.status === "ok" ? after.lazyCount : "n/a"}`);
+    f.remove();
+  }
+
+  // 4. virtualized list
+  {
+    const f = await loadFixture("/fixtures/virtualized.html");
+    await waitImagesLoaded(f.contentWindow);
+    const a = analyze(f);
+    report("virtualized", "status ok (window only)", a.status === "ok", a.status);
+    report("virtualized", "5 mounted slides", a.status === "ok" && a.slides.length === 5,
+      `got ${a.status === "ok" ? a.slides.length : "n/a"}`);
+    report("virtualized", "low-count warning fires", a.status === "ok" && a.lowCountWarning === true);
+    f.remove();
+  }
+
+  // 5. cross-origin deck
+  {
+    const f = await loadFixture("/fixtures/cross-origin.html");
+    await waitImagesLoaded(f.contentWindow);
+    const a = analyze(f);
+    report("cross-origin", "declines with cross-origin", a.status === "cross-origin", a.status);
+    report("cross-origin", "names the offending host",
+      a.status === "cross-origin" && a.sampleHost.startsWith("127.0.0.1"),
+      a.status === "cross-origin" ? a.sampleHost : "");
+    f.remove();
+  }
+
+  // 6. real captured deck (only when the server has its git-ignored path)
+  const avail = await (await fetch("/real/available")).json();
+  if (!avail.available) {
+    report("real-deck", "SKIPPED: fixture path not supplied to server", true, "run with --real-fixture");
+  } else {
+    const expected = (await (await fetch("/real/urls.json")).json()).order;
+    const f = await loadFixture("/real/deck.html");
+    // The captured page.html references the live site's stylesheet, which is
+    // not part of the capture. Reconstruct the one rule the live layout gives
+    // slides (full-width images) so unloaded slides occupy real space; the
+    // DOM structure under test is untouched.
+    const style = f.contentDocument.createElement("style");
+    style.textContent = "img{width:100%;height:auto;display:block}";
+    f.contentDocument.head.appendChild(style);
+    await sleep(800);
+    const before = analyze(f);
+    const lazySignal =
+      (before.status === "ok" && before.lazyCount > 0) ||
+      (before.status === "no-deck" && before.reason === "lazy");
+    report("real-deck", "keep-scrolling signal before scroll", lazySignal,
+      JSON.stringify(before).slice(0, 120));
+    forceEager(f.contentWindow);
+    await waitImagesLoaded(f.contentWindow, 20000);
+    const a = analyze(f);
+    report("real-deck", "status ok after scroll-through", a.status === "ok", a.status);
+    const got = a.status === "ok" ? a.slides.map((s) => new URL(s.url).pathname) : [];
+    report("real-deck", `${expected.length} slides found`, got.length === expected.length,
+      `got ${got.length}`);
+    report("real-deck", "order matches the shipped manual conversion",
+      JSON.stringify(got) === JSON.stringify(expected));
+    report("real-deck", "no warnings", a.status === "ok" && a.lazyCount === 0 &&
+      !a.lowCountWarning && a.droppedDuplicates === 0,
+      a.status === "ok" ? `lazy ${a.lazyCount} low ${a.lowCountWarning} dup ${a.droppedDuplicates}` : "");
+
+    // Full pipeline: fetch each slide, decode webp -> PNG (the collector's
+    // conversion path), assemble with pdf-lib, compare the page count.
+    try {
+      const { PDFDocument } = await import("/vendor/pdf-lib.esm.js");
+      const pdf = await PDFDocument.create();
+      for (const s of (a.status === "ok" ? a.slides : [])) {
+        const blob = await (await fetch(s.url, { redirect: "error" })).blob();
+        let bytes;
+        if (blob.type === "image/png" || blob.type === "image/jpeg") {
+          bytes = new Uint8Array(await blob.arrayBuffer());
+          if (blob.type === "image/jpeg") {
+            const img = await pdf.embedJpg(bytes);
+            pdf.addPage([img.width, img.height]).drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+            continue;
+          }
+        } else {
+          const bmp = await createImageBitmap(blob);
+          const canvas = new OffscreenCanvas(bmp.width, bmp.height);
+          canvas.getContext("2d").drawImage(bmp, 0, 0);
+          bmp.close();
+          bytes = new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
+        }
+        const img = await pdf.embedPng(bytes);
+        pdf.addPage([img.width, img.height]).drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+      }
+      const out = await pdf.save();
+      report("real-deck", "PDF page count matches",
+        pdf.getPageCount() === expected.length,
+        `${pdf.getPageCount()} pages, ${(out.length / 1048576).toFixed(1)}MB`);
+    } catch (err) {
+      report("real-deck", "PDF pipeline", false, String(err));
+    }
+    f.remove();
+  }
+
+  const failed = rows.filter((r) => !r.pass).length;
+  document.getElementById("status").textContent =
+    failed === 0 ? `ALL ${rows.length} CHECKS PASS` : `${failed} of ${rows.length} checks FAILED`;
+  document.getElementById("json").textContent = "RESULTS_JSON " + JSON.stringify({ failed, rows });
+}
+
+run().catch((err) => {
+  document.getElementById("status").textContent = "HARNESS ERROR: " + err;
+  document.getElementById("json").textContent = "RESULTS_JSON " + JSON.stringify({ failed: -1, error: String(err) });
+});
+</script>
+</body>
+</html>

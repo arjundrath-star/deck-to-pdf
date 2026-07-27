@@ -1,0 +1,26 @@
+{
+  "name": "deck-to-pdf",
+  "version": "0.4.0",
+  "description": "Chrome extension that converts DocSend and Papermark decks to PDF",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "webpack --config webpack.config.js",
+    "watch": "webpack --config webpack.config.js --watch",
+    "zip": "node scripts/zip.js",
+    "test:build": "tsc src/core/generic.ts src/core/generic-dom.ts --outDir test/.build --module es2020 --target es2020 --moduleResolution bundler --strict --skipLibCheck --lib es2020,dom",
+    "test": "npm run test:build && node --test test/*.test.mjs",
+    "test:serve": "node test/serve.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.290",
+    "copy-webpack-plugin": "^12.0.2",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.5",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}

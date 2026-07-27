@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.zip
+*.crx
+*.pem
+key.pem
+.env
+
+~$*
+
+.DS_Store
+test/.build/

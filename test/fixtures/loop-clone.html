@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Loop-clone carousel fixture</title>
+<style>body{margin:0} img{display:block;width:100%}</style></head>
+<body>
+<!-- Swiper-style loop: clone of the last slide first, then the 21 real
+     slides, then a clone of the first. 23 imgs, 21 unique URLs. -->
+<div class="swiper-wrapper" id="wrap"></div>
+<script>
+  const wrap = document.getElementById("wrap");
+  const add = (n) => {
+    const img = document.createElement("img");
+    img.src = "/gen/1200x675/c" + n + ".svg";
+    wrap.appendChild(img);
+  };
+  add(21); // leading clone of the last slide
+  for (let i = 1; i <= 21; i++) add(i);
+  add(1); // trailing clone of the first slide
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Cross-origin deck fixture</title>
+<style>body{margin:0} img{display:block;width:100%}</style></head>
+<body>
+<!-- A real deck whose slides load from a DIFFERENT origin than the page.
+     The harness loads this page from localhost; the images come from
+     127.0.0.1 on the same server, which is a different web origin. Generic
+     mode must decline and never fetch. -->
+<script>
+  const other = "http://127.0.0.1:" + (location.port || "80");
+  for (let i = 1; i <= 21; i++) {
+    const img = document.createElement("img");
+    img.src = other + "/gen/1200x675/x" + i + ".svg";
+    document.body.appendChild(img);
+  }
+</script>
+</body>
+</html>
