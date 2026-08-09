@@ -2,6 +2,10 @@
 
 A Chrome extension that downloads a DocSend or Papermark deck as a PDF in one click, generalized from a tool I built and ran at a venture firm. Published with the firm's permission. It existed so the team could file pitch decks internally without routing confidential material through a third-party converter.
 
+## Provenance
+
+This is the general, public version of an existing, fully developed repo. I built and ran the original in production at the venture firm where I worked. That original stays private with the firm, along with the complete commit history from months of development. I sanitized this copy for publication (synthetic names, placeholder IDs, no firm data) and published it fresh, so the git history here starts at the publish date. The commit count reflects the sanitization and release, not the work of building the tool.
+
 ## How it works
 
 DocSend and Papermark serve each slide as a separate image. When you open a deck, your browser has already fetched and decoded those images into the page. The extension collects them in slide order, fetches the bytes, stitches them into a PDF with [pdf-lib](https://github.com/Hopding/pdf-lib), and downloads the file. Nothing leaves your browser.
